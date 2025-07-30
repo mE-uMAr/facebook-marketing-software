@@ -1,0 +1,41 @@
+# Ignore Python bytecode and cache
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Ignore virtual environments
+venv/
+.venv/
+env/
+.env/
+ENV/
+
+# VS Code settings (optional)
+.vscode/
+
+# PyInstaller/Nuitka build folders
+build/
+dist/
+*.spec
+
+# Logs and temporary files
+*.log
+*.tmp
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# SQLite or other DBs
+*.sqlite3
+*.db
+
+# Pytest cache
+.pytest_cache/
+
+# Other cache
+.cache/
+
+# Ignore compiled files
+*.so
