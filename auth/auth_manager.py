@@ -7,7 +7,7 @@ class AuthManager:
     def __init__(self):
         self.token = None
         self.token_file = "auth_token.json"
-        self.api_url = "http://0.0.0.0:8000/api/login"
+        self.api_url = "https://validator.meharumar.codes/api/login"
         self.load_token()
     
     def load_token(self):
@@ -68,8 +68,7 @@ class AuthManager:
     
     def is_authenticated(self):
         """Check if user is authenticated"""
-        # return self.token is not None
-        return True
+        return self.token is not None
     
     def logout(self):
         """Logout and clear token"""

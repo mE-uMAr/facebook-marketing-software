@@ -61,6 +61,7 @@ class DatabaseManager:
                 price REAL NOT NULL,
                 description TEXT,
                 category TEXT,
+                condition TEXT,
                 tags TEXT,
                 location TEXT,
                 images_folder TEXT,
@@ -195,13 +196,13 @@ class DatabaseManager:
         self.execute_update("UPDATE accounts SET status = ? WHERE id = ?", (status, account_id))
     
     # Product management
-    def add_product(self, name: str, price: float, description: str = "", category: str = "", 
+    def add_product(self, name: str, price: float, description: str = "", category: str = "", condition: str = "",
                    tags: str = "", location: str = "", images_folder: str = "") -> int:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         cursor.execute(
-            "INSERT INTO products (name, price, description, category, tags, location, images_folder) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (name, price, description, category, tags, location, images_folder)
+            "INSERT INTO products (name, price, description, category, condition, tags, location, images_folder) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (name, price, description, category, condition, tags, location, images_folder)
         )
         product_id = cursor.lastrowid
         conn.commit()

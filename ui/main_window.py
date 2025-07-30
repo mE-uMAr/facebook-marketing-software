@@ -571,7 +571,7 @@ class ManageProductsDialog(QDialog):
     
     def load_products(self):
         """Load products into table"""
-        products = self.db_manager.get_products_by_group(self.group_id)
+        products = self.db_manager.get_all_products()
         self.products_table.setRowCount(len(products))
         
         for row, product in enumerate(products):
@@ -624,5 +624,5 @@ class ManageProductsDialog(QDialog):
                                    'Are you sure you want to remove this product from the group?',
                                    QMessageBox.Yes | QMessageBox.No)
         if reply == QMessageBox.Yes:
-            self.db_manager.remove_product_from_group(self.group_id, product_id)
+            self.db_manager.delete_product(product_id)
             self.load_products()

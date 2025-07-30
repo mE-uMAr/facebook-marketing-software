@@ -39,9 +39,6 @@ class LoginDialog(QDialog):
         # Buttons
         button_layout = QHBoxLayout()
         
-        cancel_btn = QPushButton("Cancel")
-        cancel_btn.clicked.connect(self.reject)
-        button_layout.addWidget(cancel_btn)
         
         self.login_btn = QPushButton("Login")
         self.login_btn.clicked.connect(self.login)

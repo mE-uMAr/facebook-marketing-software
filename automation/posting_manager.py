@@ -109,13 +109,11 @@ class PostingManager(QObject):
                     thread.start()
                     threads.append(thread)
                 
-                # Wait for batch to complete
                 for thread in threads:
                     thread.join()
-                
-                # Human-like delay between batches
+
                 if i + batch_size < len(accounts) and self.is_running:
-                    delay = random.randint(30, 60)
+                    delay = random.randint(10, 30)
                     self.log_message.emit(f"Waiting {delay} seconds before next batch...", "INFO")
                     time.sleep(delay)
             
@@ -159,7 +157,7 @@ class PostingManager(QObject):
                     locale='en-US',
                     timezone_id='America/New_York'
                 )
-                
+                context.set_default_timeout(60000) 
                 # Load cookies if available
                 if account['cookies']:
                     try:
@@ -188,7 +186,7 @@ class PostingManager(QObject):
                 
                 # Check if logged in
                 self.account_status_changed.emit(account_id, "processing", "Checking login status")
-                page.goto("https://www.facebook.com/", wait_until='networkidle')
+                page.goto("https://www.facebook.com/", wait_until='domcontentloaded')
                 
                 # Human-like delay
                 time.sleep(random.uniform(2, 5))
@@ -257,23 +255,22 @@ class PostingManager(QObject):
     def _is_login_required(self, page):
         """Check if login is required with less strict verification"""
         try:
-            page.wait_for_timeout(3000)
+            page.wait_for_timeout(32000)
             logged_in_selectors = [
                 '[data-testid="blue_bar_profile_link"]',
                 '[aria-label="Account"]',
                 '[data-testid="left_nav_menu_item"]',
                 'div[role="banner"]',
-                '[data-testid="nav-search-input"]'
+                '[data-testid="nav-search-input"]',
+                '[aria-label="home"]',
             ]
             
             for selector in logged_in_selectors:
                 try:
                     if page.query_selector(selector):
-                        return False  # Already logged in
+                        return False
                 except:
                     continue
-            
-            # If we can't find logged in indicators, assume login is needed
             return True
             
         except:
@@ -282,7 +279,7 @@ class PostingManager(QObject):
     def _login_facebook(self, page, email, password):
         """Login to Facebook with human-like behavior"""
         try:
-            page.goto("https://www.facebook.com/", wait_until='networkidle')
+            page.goto("https://www.facebook.com/", wait_until='domcontentloaded')
             time.sleep(random.uniform(2, 4))
             page.wait_for_selector("input[name='email']")
             email_field = page.query_selector("input[name='email']")
@@ -316,9 +313,10 @@ class PostingManager(QObject):
             time.sleep(random.uniform(3, 5))
             current_url = page.url.lower()
 
-            if "login" in current_url or "checkpoint" in current_url:
+            if "login" in current_url or "checkpoint" in current_url or "challenge" in current_url:
                 return False
-            
+            if "two_step_verification" in current_url or "authentication" in current_url:
+                raise Exception("2FA or Captcha detected")
             return True
             
         except Exception as e:
@@ -328,7 +326,7 @@ class PostingManager(QObject):
     def _post_product(self, page, product):
         """Post a single product to Facebook Marketplace with improved selectors"""
         try:
-            page.goto("https://www.facebook.com/marketplace/create/item")
+            page.goto("https://www.facebook.com/marketplace/create/item", timeout=80000, wait_until="domcontentloaded")
 
             time.sleep(random.uniform(3, 5))
             title_selectors = [
@@ -367,8 +365,22 @@ class PostingManager(QObject):
                 page.keyboard.type(char)
                 time.sleep(random.uniform(0.05, 0.12))
 
+            time.sleep(random.uniform(2, 4))
+            page.evaluate("""
+                document.querySelectorAll('input[type="file"][accept*="image"]').forEach(input => {
+                    input.style.display = 'block';
+                    input.style.opacity = '1';
+                    input.style.visibility = 'visible';
+                    input.style.width = '300px';
+                    input.style.height = '50px';
+                    input.style.zIndex = '9999';
+                    input.style.position = 'fixed';
+                    input.style.top = '30px';
+                    input.style.left = '30px';
+                    input.removeAttribute('hidden');
+                });
+            """)
             time.sleep(random.uniform(1, 2))
-
             price_selectors = [
                 "input[aria-label*='Price']",
                 "input[placeholder*='Price']",
@@ -405,47 +417,13 @@ class PostingManager(QObject):
             
             # Human delay
             time.sleep(random.uniform(1, 2))
-            
-            # Fill description if available
-            if product['description']:
-                description_selectors = [
-                    "textarea[aria-label*='Describe']",
-                    "textarea[placeholder*='Describe']",
-                    "textarea[name='description']",
-                    "div[contenteditable='true']",
-                    "//span[contains(text(), 'Description')]/following::textarea[1]",
-                    "//label[contains(., 'Description')]/following::textarea[1]",
-                    "//textarea[@id='_r_8h_']" 
-                ]
-                
-                for selector in description_selectors:
-                    try:
-                        desc_field = page.query_selector(selector)
-                        if desc_field:
-                            desc_field.click()
-                            time.sleep(random.uniform(0.5, 1))
-                            
-                            # Type description with human-like speed
-                            words = product['description'].split()
-                            for i, word in enumerate(words):
-                                page.keyboard.type(word)
-                                if i < len(words) - 1:
-                                    page.keyboard.type(" ")
-                                time.sleep(random.uniform(0.1, 0.3))
-                            break
-                    except:
-                        continue
 
+            # === CATEGORY SELECTION ===
             if product['category']:
                 category_selectors = [
-                    "label[role='combobox']",
-                    "div[class*='xjhjgkd']",
-                    "label[aria-labelledby*='_r_']",
-                    "[id='_r_4v_']",
-                    "div[class*='xjyslct']",
                     "//span[contains(text(), 'Category')]/ancestor::label[1]",
-                    "//label[contains(@aria-labelledby, '_r_')]",
-                    "//div[@class and contains(@class, 'xjhjgkd')]//label[@role='combobox']"
+                    "//label[contains(@aria-labelledby, '_r_') and descendant::span[contains(text(), 'Category')]]",
+                    "//div[contains(@class, 'xjhjgkd')]//label[@role='combobox' and descendant::span[contains(text(), 'Category')]]",
                 ]
                 
                 for selector in category_selectors:
@@ -454,11 +432,10 @@ class PostingManager(QObject):
                         if category_field:
                             category_field.click()
                             time.sleep(random.uniform(0.5, 1))
-                            
-                            # Wait for dropdown to appear
+
+                            # Wait for dropdown to load
                             time.sleep(random.uniform(0.3, 0.7))
-                            
-                            # Look for the specific category option in the dropdown
+
                             category_options = [
                                 f"//span[contains(text(), '{product['category']}')]",
                                 f"//div[contains(text(), '{product['category']}')]",
@@ -466,23 +443,64 @@ class PostingManager(QObject):
                                 f"div[data-visualcompletion='ignore-dynamic'] span:has-text('{product['category']}')",
                                 f"//div[@role='button']//span[contains(text(), '{product['category']}')]"
                             ]
-                            
+
                             for option_selector in category_options:
                                 try:
                                     category_option = page.query_selector(option_selector)
                                     if category_option:
-                                        # Human-like pause before clicking
                                         time.sleep(random.uniform(0.2, 0.5))
                                         category_option.click()
                                         time.sleep(random.uniform(0.3, 0.8))
                                         break
-                                except:
+                                except Exception:
+                                    continue
+                            break  # Break outer loop once category is handled
+                    except Exception:
+                        continue
+
+
+            # === CONDITION SELECTION ===
+            time.sleep(random.uniform(1, 2))
+            if product['condition']:
+                condition_selectors = [
+                    "//span[contains(text(), 'Condition')]/ancestor::label[1]",
+                    "//label[contains(@aria-labelledby, '_r_') and descendant::span[contains(text(), 'Condition')]]",
+                    "//div[contains(@class, 'xjhjgkd')]//label[@role='combobox' and descendant::span[contains(text(), 'Condition')]]",
+                ]
+
+                for selector in condition_selectors:
+                    try:
+                        condition_field = page.query_selector(selector)
+                        if condition_field:
+                            condition_field.click()
+                            time.sleep(random.uniform(0.5, 1))
+
+                            # Wait for dropdown
+                            time.sleep(random.uniform(0.3, 0.7))
+
+                            condition_options = [
+                                f"//span[contains(text(), '{product['condition']}')]",
+                                f"//div[contains(text(), '{product['condition']}')]",
+                                f"[role='button'][aria-label*='{product['condition']}']",
+                                f"div[data-visualcompletion='ignore-dynamic'] span:has-text('{product['condition']}')",
+                                f"//div[@role='button']//span[contains(text(), '{product['condition']}')]"
+                            ]
+
+                            for option_selector in condition_options:
+                                try:
+                                    condition_option = page.query_selector(option_selector)
+                                    if condition_option:
+                                        time.sleep(random.uniform(0.2, 0.5))
+                                        condition_option.click()
+                                        time.sleep(random.uniform(0.3, 0.8))
+                                        break
+                                except Exception:
                                     continue
                             break
-                    except:
+                    except Exception:
                         continue
-                    
-            if product['images_folder'] and os.path.exists(product['images_folder']):
+
+            if product.get('images_folder') and os.path.exists(product['images_folder']):
                 try:
                     image_files = [
                         os.path.join(product['images_folder'], file)
@@ -491,54 +509,170 @@ class PostingManager(QObject):
                     ][:10]
 
                     if image_files:
-                        file_input = page.locator("input[type='file']").first
-                        file_input.wait_for(timeout=5000)
-                        file_input.set_input_files(image_files)
+                        page.wait_for_selector('input[type="file"][accept*="image"]', timeout=31000)
+                        page.set_input_files('input[type="file"][accept*="image"]', image_files)
                         time.sleep(random.uniform(5, 8))
 
                 except Exception as e:
                     self.log_message.emit(f"Image upload error: {str(e)}", "WARNING")
+
+            time.sleep(random.uniform(4, 8))
             
-            # Human delay before publishing
-            time.sleep(random.uniform(2, 4))
-            
-            # Try to find and click publish/next button
-            publish_selectors = [
-                "div[aria-label*='Next']",
-                "div[aria-label*='Publish']",
-                "button:has-text('Next')",
-                "button:has-text('Publish')",
-                "[data-testid*='publish']",
-                "[data-testid*='next']",
-                "div[role='button']:has-text('Next')",
-                "div[role='button']:has-text('Publish')"
-            ]
+            try:
+                more_details_selectors = [
+                    "//span[text()='More details']/ancestor::div[@role='button']",
+                    "//span[contains(text(), 'More details')]/ancestor::div[@role='button']",
+                    "div[role='button']:has(span#_r_22_)",
+                    "#_r_22_",  # Direct ID target, safest if static
+                    "span:has-text('More details')",
+                ]
 
-            # Keep clicking "Next"/"Publish" until successful or max attempts
-            max_attempts = 5
-            attempt = 0
-            clicked = False
-
-            while attempt < max_attempts:
-                attempt += 1
-                found_button = False
-
-                for selector in publish_selectors:
+                for selector in more_details_selectors:
                     try:
-                        button = page.query_selector(selector)
-                        if button and button.is_visible():
-                            button.scroll_into_view_if_needed()
-                            time.sleep(random.uniform(0.5, 1))
-                            button.click()
-                            found_button = True
-                            clicked = True
-                            self.log_message.emit(f"Clicked button (attempt {attempt}): {selector}", "INFO")
+                        more_details_btn = page.query_selector(selector)
+                        if more_details_btn:
+                            time.sleep(random.uniform(0.3, 0.6))
+                            more_details_btn.click()
+                            time.sleep(random.uniform(0.4, 0.8))
+                            break
+                    except Exception as e:
+                        self.log_message.emit(f"[!] Failed selector: {selector} | {e}", "WARNING")
+                        continue
+            except Exception as e:
+                self.log_message.emit(f"[!] Error clicking 'More details': {e}", "WARNING")
+
+            # Fill description if available
+            if product['description']:
+                description_selectors = [
+                    "textarea#_r_3l_",
+                    "//span[text()='Description']/ancestor::label//textarea",
+                    "//label[contains(., 'Description')]//textarea",
+                    "textarea[class*='x1tutvks']",
+                    "textarea[class*='x1s07b3s']",
+                    "textarea[class*='xcrlgei']"
+                ]
+
+                for selector in description_selectors:
+                    try:
+                        desc_field = page.query_selector(selector)
+                        if desc_field:
+                            desc_field.click()
+                            time.sleep(random.uniform(0.3, 0.5))
+
+                            # Clear existing content
+                            desc_field.fill("")  # optional, safe reset
+
+                            # Paste full text instantly
+                            page.keyboard.insert_text(product['description'])
+
+                            time.sleep(random.uniform(0.4, 0.7))
                             break
                     except Exception as e:
                         continue
 
-                if not found_button:
-                    self.log_message.emit(f"No publish/next button found on attempt {attempt}", "WARNING")
+            time.sleep(random.uniform(2, 4))
+            if product['location']:
+                location_selectors = [
+                    'input[placeholder="Location"]',
+                    '//label[contains(., "Location")]/following-sibling::div//input',
+                    '//input[contains(@aria-label, "Location")]',
+                    '//div[contains(text(),"Location")]/following::input[1]',
+                    'input[class*="x1i10hfl"]',  # dynamic class fallback
+                ]
+
+                for selector in location_selectors:
+                    try:
+                        location_input = page.query_selector(selector)
+                        if location_input:
+                            location_input.click()
+                            time.sleep(random.uniform(0.3, 0.5))
+
+                            location_input.fill("")
+                            page.keyboard.insert_text(product['location'])
+
+                            time.sleep(random.uniform(1.0, 1.5))  # wait for dropdown
+
+                            # Multi-tag selectors for the suggestion list
+                            suggestion_selectors = [
+                                'ul[role="listbox"] > li:nth-child(1)',
+                                '//ul[@role="listbox"]/li[1]',
+                                '//div[@role="listbox"]//li[1]',
+                                '//div[@aria-label="Location"]/following::ul//li[1]',
+                            ]
+
+                            for s_selector in suggestion_selectors:
+                                try:
+                                    first_suggestion = page.query_selector(s_selector)
+                                    if first_suggestion:
+                                        first_suggestion.click()
+                                        time.sleep(random.uniform(0.4, 0.6))
+                                        break
+                                except Exception:
+                                    continue
+
+                            break  # exit outer loop once filled and selected
+                    except Exception:
+                        continue
+
+            # Human delay before publishing
+            time.sleep(random.uniform(4, 6))
+            
+            # Try to find and click publish/next button
+            # --- STEP 1: Click "Next" button ---
+            next_selectors = [
+                "div[aria-label='Next'][aria-disabled!='true'][role='button']",
+                "//div[@role='button' and @aria-label='Next' and not(@aria-disabled='true')]",
+                "div[class*='x1i10hfl'][role='button'][tabindex='0']"  # generic enabled button fallback
+            ]
+
+            next_clicked = False
+            for selector in next_selectors:
+                try:
+                    for _ in range(10):
+                        next_btn = page.query_selector(selector)
+                        if next_btn and next_btn.is_visible():
+                            aria_disabled = next_btn.get_attribute("aria-disabled")
+                            if not aria_disabled or aria_disabled == "false":
+                                next_btn.scroll_into_view_if_needed()
+                                time.sleep(random.uniform(0.5, 0.8))
+                                next_btn.click()
+                                self.log_message.emit(f"Clicked Next button: {selector}", "INFO")
+                                next_clicked = True
+                                break
+                        time.sleep(0.5)
+                    if next_clicked:
+                        break
+                except Exception:
+                    continue
+
+            # --- STEP 2: Click "Publish" button after Next is done ---
+            if next_clicked:
+                time.sleep(random.uniform(1.2, 2.0))  # wait for transition to publish
+
+                publish_selectors = [
+                    "div[aria-label='Publish'][aria-disabled!='true'][role='button']",
+                    "//div[@role='button' and @aria-label='Publish' and not(@aria-disabled='true')]",
+                    "div[class*='x1i10hfl'][role='button'][tabindex='0']"
+                ]
+
+                for selector in publish_selectors:
+                    try:
+                        for _ in range(10):
+                            publish_btn = page.query_selector(selector)
+                            if publish_btn and publish_btn.is_visible():
+                                aria_disabled = publish_btn.get_attribute("aria-disabled")
+                                if not aria_disabled or aria_disabled == "false":
+                                    publish_btn.scroll_into_view_if_needed()
+                                    time.sleep(random.uniform(0.5, 0.8))
+                                    publish_btn.click()
+                                    self.log_message.emit(f"Clicked Publish button: {selector}", "INFO")
+                                    break
+                            time.sleep(0.5)
+                        else:
+                            self.log_message.emit("Publish button not found or disabled", "ERROR")
+                    except Exception:
+                        continue
+
 
                 # Wait for navigation or UI change
                 time.sleep(random.uniform(4, 6))

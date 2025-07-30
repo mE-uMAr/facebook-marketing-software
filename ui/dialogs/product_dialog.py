@@ -1,5 +1,5 @@
 from PyQt5.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, 
-                            QPushButton, QTextEdit, QFileDialog, QMessageBox, QDoubleSpinBox)
+                            QPushButton, QTextEdit, QFileDialog, QMessageBox, QDoubleSpinBox, QComboBox)
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QFont
 import os
@@ -52,10 +52,33 @@ class ProductDialog(QDialog):
         layout.addWidget(self.price_spin)
         
         # Category
+        # layout.addWidget(QLabel("Category:"))
+        # self.category_edit = QLineEdit()
+        # layout.addWidget(self.category_edit)
+
+        # Category (Dropdown)
         layout.addWidget(QLabel("Category:"))
-        self.category_edit = QLineEdit()
+        self.category_edit = QComboBox()
+        self.category_edit.addItems([
+            "Electronics", "Furniture", "Baby & children", "Toys and games",
+            "Women's clothing & shoes", "Mobile phones", "Sport and outdoors",
+            "Tools", "Books, films & music", "Car parts", "Appliances",
+            "Jewellery and accessories", "Antiques and collectibles"
+        ])
         layout.addWidget(self.category_edit)
-        
+
+        # Condition (Dropdown)
+        layout.addWidget(QLabel("Condition:"))
+        self.condition_edit = QComboBox()
+        self.condition_edit.addItems([
+            "New",
+            "Used – Like New",
+            "Used – Good",
+            "Used – Fair",
+            "For parts or not working"
+        ])
+        layout.addWidget(self.condition_edit)
+
         # Tags
         layout.addWidget(QLabel("Tags:"))
         self.tags_edit = QLineEdit()
@@ -103,7 +126,8 @@ class ProductDialog(QDialog):
         """Load existing product data"""
         self.name_edit.setText(self.product_data['name'])
         self.price_spin.setValue(self.product_data['price'])
-        self.category_edit.setText(self.product_data['category'] or "")
+        self.category_edit.setCurrentText(self.product_data['category'] or "")
+        self.condition_edit.setCurrentText(self.product_data['condition'] or "")
         self.tags_edit.setText(self.product_data['tags'] or "")
         self.location_edit.setText(self.product_data['location'] or "")
         self.description_edit.setPlainText(self.product_data['description'] or "")
@@ -128,7 +152,8 @@ class ProductDialog(QDialog):
             QMessageBox.warning(self, "Error", "Price must be greater than 0.")
             return
         
-        category = self.category_edit.text().strip()
+        category = self.category_edit.currentText().strip()
+        condition = self.condition_edit.currentText().strip()
         tags = self.tags_edit.text().strip()
         location = self.location_edit.text().strip()
         description = self.description_edit.toPlainText().strip()
@@ -143,14 +168,14 @@ class ProductDialog(QDialog):
             if self.is_edit_mode:
                 # Update existing product
                 self.db_manager.execute_update(
-                    "UPDATE products SET name = ?, price = ?, category = ?, tags = ?, location = ?, description = ?, images_folder = ? WHERE id = ?",
-                    (name, price, category, tags, location, description, images_folder, self.product_data['id'])
+                    "UPDATE products SET name = ?, price = ?, category = ?, condition = ?, tags = ?, location = ?, description = ?, images_folder = ? WHERE id = ?",
+                    (name, price, category, condition, tags, location, description, images_folder, self.product_data['id'])
                 )
                 self.product_id = self.product_data['id']
             else:
                 # Create new product
                 self.product_id = self.db_manager.add_product(
-                    name, price, description, category, tags, location, images_folder
+                    name, price, description, category, condition, tags, location, images_folder
                 )
             
             self.accept()
