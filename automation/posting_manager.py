@@ -472,32 +472,118 @@ class PostingManager(QObject):
                     try:
                         condition_field = page.query_selector(selector)
                         if condition_field:
+                            print(f"Found condition field, clicking...")
                             condition_field.click()
-                            time.sleep(random.uniform(0.5, 1))
+                            time.sleep(random.uniform(0.8, 1.2))
 
-                            # Wait for dropdown
-                            time.sleep(random.uniform(0.3, 0.7))
+                            # Wait for dropdown options with specific ID pattern to appear
+                            dropdown_appeared = False
+                            for attempt in range(15):
+                                # Look for elements with the specific ID pattern from your HTML: _r_1q___0, _r_1q___1, etc.
+                                options = page.query_selector_all("//div[starts-with(@id, '_r_') and contains(@id, '___') and @role='option']")
+                                if options and len(options) > 0:
+                                    dropdown_appeared = True
+                                    print(f"Found {len(options)} condition options with unique IDs")
+                                    break
+                                time.sleep(0.3)
 
-                            condition_options = [
-                                f"//span[contains(text(), '{product['condition']}')]",
-                                f"//div[contains(text(), '{product['condition']}')]",
-                                f"[role='button'][aria-label*='{product['condition']}']",
-                                f"div[data-visualcompletion='ignore-dynamic'] span:has-text('{product['condition']}')",
-                                f"//div[@role='button']//span[contains(text(), '{product['condition']}')]"
+                            if not dropdown_appeared:
+                                print("Condition dropdown with unique IDs didn't appear")
+                                continue
+
+                            # Ultra-precise XPath targeting only dropdown options with unique IDs
+                            option_found = False
+                            
+                            # Get all condition options using the unique ID pattern
+                            condition_xpath_selectors = [
+                                # Exact text match within uniquely identified dropdown options
+                                f"//div[starts-with(@id, '_r_') and contains(@id, '___') and @role='option']//span[text()='{product['condition']}']",
+                                
+                                # Case insensitive exact match
+                                f"//div[starts-with(@id, '_r_') and contains(@id, '___') and @role='option']//span[translate(text(), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz')=translate('{product['condition']}', 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz')]",
+                                
+                                # Partial match for complex conditions like "Used – like new"
+                                f"//div[starts-with(@id, '_r_') and contains(@id, '___') and @role='option']//span[contains(text(), '{product['condition']}')]",
+                                
+                                # Match first word (for "New", "Used" etc.)
+                                f"//div[starts-with(@id, '_r_') and contains(@id, '___') and @role='option']//span[starts-with(text(), '{product['condition'].split()[0]}')]",
                             ]
 
-                            for option_selector in condition_options:
+                            # Debug: Show available options
+                            available_options = page.query_selector_all("//div[starts-with(@id, '_r_') and contains(@id, '___') and @role='option']//span")
+                            available_texts = []
+                            for opt in available_options:
                                 try:
-                                    condition_option = page.query_selector(option_selector)
-                                    if condition_option:
-                                        time.sleep(random.uniform(0.2, 0.5))
-                                        condition_option.click()
-                                        time.sleep(random.uniform(0.3, 0.8))
-                                        break
-                                except Exception:
+                                    text = opt.text_content().strip()
+                                    if text:
+                                        available_texts.append(text)
+                                except:
+                                    pass
+                            print(f"Available condition options: {available_texts}")
+                            print(f"Looking for: '{product['condition']}'")
+
+                            # Try each XPath selector
+                            for xpath_selector in condition_xpath_selectors:
+                                try:
+                                    print(f"Trying XPath: {xpath_selector}")
+                                    option_span = page.query_selector(xpath_selector)
+                                    if option_span:
+                                        # Get the parent div with role='option' to click
+                                        option_div = option_span.query_selector("xpath=./ancestor::div[@role='option']")
+                                        if option_div:
+                                            print(f"Found option div with ID: {option_div.get_attribute('id')}")
+                                            option_div.scroll_into_view_if_needed()
+                                            time.sleep(0.2)
+                                            
+                                            # Click the option div
+                                            option_div.click()
+                                            print(f"Successfully clicked condition: {product['condition']}")
+                                            time.sleep(random.uniform(0.5, 1.0))
+                                            option_found = True
+                                            break
+                                    else:
+                                        print("No match found with this XPath")
+                                except Exception as e:
+                                    print(f"Error with XPath selector: {e}")
                                     continue
+
+                            # Alternative approach: Direct ID-based clicking if text matching fails
+                            if not option_found:
+                                print("Trying direct ID-based approach...")
+                                option_divs = page.query_selector_all("//div[starts-with(@id, '_r_') and contains(@id, '___') and @role='option']")
+                                
+                                for div in option_divs:
+                                    try:
+                                        span = div.query_selector(".//span")
+                                        if span:
+                                            span_text = span.text_content().strip()
+                                            # Exact match or case-insensitive match
+                                            if (span_text == product['condition'] or 
+                                                span_text.lower() == product['condition'].lower() or
+                                                product['condition'].lower() in span_text.lower()):
+                                                
+                                                div_id = div.get_attribute('id')
+                                                print(f"Direct clicking option with ID: {div_id}, text: '{span_text}'")
+                                                div.scroll_into_view_if_needed()
+                                                time.sleep(0.2)
+                                                div.click()
+                                                time.sleep(random.uniform(0.5, 1.0))
+                                                option_found = True
+                                                break
+                                    except Exception as e:
+                                        print(f"Error in direct ID approach: {e}")
+                                        continue
+
+                            if not option_found:
+                                print(f"FAILED: Could not find and click condition '{product['condition']}'")
+                                print(f"Available options were: {available_texts}")
+                            else:
+                                print(f"SUCCESS: Condition '{product['condition']}' selected")
+
                             break
-                    except Exception:
+                            
+                    except Exception as e:
+                        print(f"Error with condition selector {selector}: {e}")
                         continue
 
             if product.get('images_folder') and os.path.exists(product['images_folder']):
@@ -518,28 +604,28 @@ class PostingManager(QObject):
 
             time.sleep(random.uniform(4, 8))
             
-            try:
-                more_details_selectors = [
-                    "//span[text()='More details']/ancestor::div[@role='button']",
-                    "//span[contains(text(), 'More details')]/ancestor::div[@role='button']",
-                    "div[role='button']:has(span#_r_22_)",
-                    "#_r_22_",  # Direct ID target, safest if static
-                    "span:has-text('More details')",
-                ]
+            # try:
+            #     more_details_selectors = [
+            #         "//span[text()='More details']/ancestor::div[@role='button']",
+            #         "//span[contains(text(), 'More details')]/ancestor::div[@role='button']",
+            #         "div[role='button']:has(span#_r_22_)",
+            #         "#_r_22_",  # Direct ID target, safest if static
+            #         "span:has-text('More details')",
+            #     ]
 
-                for selector in more_details_selectors:
-                    try:
-                        more_details_btn = page.query_selector(selector)
-                        if more_details_btn:
-                            time.sleep(random.uniform(0.3, 0.6))
-                            more_details_btn.click()
-                            time.sleep(random.uniform(0.4, 0.8))
-                            break
-                    except Exception as e:
-                        self.log_message.emit(f"[!] Failed selector: {selector} | {e}", "WARNING")
-                        continue
-            except Exception as e:
-                self.log_message.emit(f"[!] Error clicking 'More details': {e}", "WARNING")
+            #     for selector in more_details_selectors:
+            #         try:
+            #             more_details_btn = page.query_selector(selector)
+            #             if more_details_btn:
+            #                 time.sleep(random.uniform(0.3, 0.6))
+            #                 more_details_btn.click()
+            #                 time.sleep(random.uniform(0.4, 0.8))
+            #                 break
+            #         except Exception as e:
+            #             self.log_message.emit(f"[!] Failed selector: {selector} | {e}", "WARNING")
+            #             continue
+            # except Exception as e:
+            #     self.log_message.emit(f"[!] Error clicking 'More details': {e}", "WARNING")
 
             # Fill description if available
             if product['description']:
@@ -577,7 +663,7 @@ class PostingManager(QObject):
                     '//label[contains(., "Location")]/following-sibling::div//input',
                     '//input[contains(@aria-label, "Location")]',
                     '//div[contains(text(),"Location")]/following::input[1]',
-                    'input[class*="x1i10hfl"]',  # dynamic class fallback
+                    'input[id="_r_5d_"]',
                 ]
 
                 for selector in location_selectors:
